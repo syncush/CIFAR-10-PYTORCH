@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from torch.utils.data.sampler import SubsetRandomSampler
 import time
 import datetime
+import sys
 import pandas as pd
 from torch import nn
 
@@ -193,8 +194,8 @@ class TrainerModels(object):
             vld_loss, vld_acc = self.test((self.valid_loader, 'Valid'))
             print("Valid loss: {} \t Valid accuracy: {}%".format(vld_loss, vld_acc))
             #test_loss, test_acc = self.test((self.test_loader, 'Test'))
-            #for key, value in zip(dictionary.keys(), [self.model_no, train_acc, train_loss, x, vld_acc, vld_loss, test_acc, test_loss]):
-            #    dictionary[key].append(value)
+            for key, value in zip(dictionary.keys(), [self.model_no, x, vld_acc, vld_loss]):
+                dictionary[key].append(value)
 
     def write_test_pred(self, loader, accuracy):
         self.model.eval()
@@ -281,5 +282,43 @@ def resenet():
     trainer.train()
 
 
+def parse_table(df):
+    models = []
+    model = None
+    for index, row in df.iterrows():
+        batch_size = int(row[0])
+        LR = float(row[1])
+        num_epocs = int(row[2])
+        channel_in1 = int(row[3])
+        channel_out1 = int(row[4])
+        hidden_size1 = int(row[5])
+        hidden_size2 = int(row[6])
+        model = ConvulutionalNeuralNetwork(channel_in1, channel_out1, hidden_size1, hidden_size2)
+        criterion = nn.CrossEntropyLoss()
+        if row[7] in ["adam", "Adam", "ADAM"]:
+            optimizer = Adam(model.parameters(), lr=LR)
+        else:
+            optimizer = SGD(model.parameters(), lr=LR, momentum=0.9)
+        models.append(TrainerModels(model, num_epocs, get_data_loaders_cifar10(batch_size), criterion, optimizer, index, batch_size))
+    return models
+
+
+def multi():
+    trainers = parse_table(pd.read_csv('./models.csv'))
+    res = {"model_no": [], "epoch_no": [], "valid_acc": [], "valid_loss": []}
+    for i, trainer in enumerate(trainers):
+        print("Proccessing {} / {}".format(i + 1, len(trainers)))
+        trainer.train(dictionary=res)
+    df2 = pd.DataFrame(data=res)
+    df2.to_csv(path_or_buf="./results.csv")
+
+
 if __name__ == '__main__':
-    single()
+    if len(sys.argv) < 1 + 1:
+        single()
+    if sys.argv[1] in ["resnet", "Resnet"]:
+        resenet()
+    elif sys.argv[1] in ["single", "Single"]:
+        single()
+    else:
+        multi()
