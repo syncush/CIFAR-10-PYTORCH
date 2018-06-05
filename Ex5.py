@@ -8,7 +8,9 @@ import torch.nn.functional as F
 from torch.utils.data.sampler import SubsetRandomSampler
 import time
 import datetime
+import pickle
 import sys
+from torch.autograd.variable import Variable
 import pandas as pd
 from torch import nn
 
@@ -197,11 +199,13 @@ class TrainerModels(object):
             for key, value in zip(dictionary.keys(), [self.model_no, x, vld_acc, vld_loss]):
                 dictionary[key].append(value)
 
-    def write_test_pred(self, loader, accuracy):
+    def write_test_pred(self, accuracy):
         self.model.eval()
         predictions = []
-        for data, target in loader:
-            output = self.model(data)
+        test = pickle.load(open('test.pickle', 'rb'))
+        for data in test:
+            image = Variable(data)
+            output = self.model(image)
             pred = output.data.max(1, keepdim=True)[1]  # get the index of the max log-probability
             predictions.append(str(pred.item()))
         ts = time.time()
@@ -262,9 +266,25 @@ class ResnetTransferTrainer(Trainer):
             #train_loss, train_acc = self.test((self.train_loader, 'train'))
             vld_loss, vld_acc = self.test((self.valid_loader, 'Valid'))
             print("Valid loss: {} \t Valid accuracy: {}%".format(vld_loss, vld_acc))
+            if vld_acc > 85.0:
+                self.write_test_pred(vld_acc)
             #test_loss, test_acc = self.test((self.test_loader, 'Test'))
             #for key, value in zip(dictionary.keys(), [self.model_no, train_acc, train_loss, x, vld_acc, vld_loss, test_acc, test_loss]):
             #    dictionary[key].append(value)
+
+    def write_test_pred(self, accuracy):
+        self.model.eval()
+        predictions = []
+        test = pickle.load(open('test.pickle', 'rb'))
+        for data in test:
+            image = Variable(data)
+            output = self.model(image)
+            pred = output.data.max(1, keepdim=True)[1]  # get the index of the max log-probability
+            predictions.append(str(pred.item()))
+        ts = time.time()
+        st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d_%H:%M:%S')
+        with open('test__{}____{}__.pred'.format(st, accuracy), 'w') as f:
+            f.write('\n'.join(predictions))
 
 
 def single():
@@ -278,7 +298,7 @@ def single():
 
 
 def resenet():
-    trainer = ResnetTransferTrainer(batch_size=250, num_epocs=10, critetion=nn.CrossEntropyLoss(), optimizer='SGD')
+    trainer = ResnetTransferTrainer(batch_size=50, num_epocs=5, critetion=nn.CrossEntropyLoss(), optimizer='SGD')
     trainer.train()
 
 
