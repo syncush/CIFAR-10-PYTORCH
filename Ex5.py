@@ -5,6 +5,7 @@ from torch.optim import Adam,SGD
 from torchvision.models import resnet18
 import numpy
 import torch.nn.functional as F
+import torch.cuda
 from torch.utils.data.sampler import SubsetRandomSampler
 import time
 import datetime
@@ -55,18 +56,9 @@ def get_datasets_cifar10(resnet=False):
 
 def get_data_loaders_cifar10(batch_size, resnet=False):
     train_dataset, test_dataset = get_datasets_cifar10(resnet)
-    num_train = len(train_dataset)
-    indices = list(range(num_train))
-    # Random
-    valid_idx = numpy.random.choice(indices, size=int(0.2 * num_train), replace=False)
-    train_idx = list(set(indices) - set(valid_idx))
-    # Contiguous split
-    train_sampler = SubsetRandomSampler(train_idx)
-    validation_sampler = SubsetRandomSampler(valid_idx)
-    validation_loader = DataLoader(dataset=train_dataset, batch_size=1, sampler=validation_sampler)
     test_loader = DataLoader(dataset=test_dataset, batch_size=1, shuffle=False)
-    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, sampler=train_sampler)
-    return train_loader, validation_loader, test_loader
+    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+    return train_loader, test_loader
 
 
 class ConvulutionalNeuralNetwork(nn.Module):
@@ -76,6 +68,8 @@ class ConvulutionalNeuralNetwork(nn.Module):
         self.size_channel_out = channel_output_two * 22 * 22
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=channel_output_one, kernel_size=kernel_size)
         self.conv2 = nn.Conv2d(in_channels=channel_output_one, out_channels=channel_output_two, kernel_size=kernel_size)
+        self.batchnorm2d1 = nn.BatchNorm2d(channel_output_one)
+        self.batchnorm2d2 = nn.BatchNorm2d(channel_output_two)
         self.activation1 = nn.ReLU()
         self.activation2 = nn.ReLU()
         self.activation3 = nn.ReLU()
@@ -94,11 +88,13 @@ class ConvulutionalNeuralNetwork(nn.Module):
     def forward(self, x):
         #First layer
         out = self.conv1(x)
+        out = self.batchnorm2d1(out)
         out = self.activation1(out)
         out = self.pooling1(out)
 
         #Second layer
         out = self.conv2(out)
+        out = self.batchnorm2d2(out)
         out = self.activation2(out)
         out = self.pooling2(out)
         ###
@@ -108,13 +104,13 @@ class ConvulutionalNeuralNetwork(nn.Module):
         out = self.linear1(out)
         out = self.bn1(out)
         out = self.activation3(out)
-        #out = self.dropout1(out)
+        out = self.dropout1(out)
 
         #fourth layer
         out = self.linear2(out)
         out = self.bn2(out)
         out = self.activation4(out)
-        #out = self.dropout2(out)
+        out = self.dropout2(out)
 
         #Output layer
         out = self.linear3(out)
@@ -140,7 +136,7 @@ class Trainer(object):
     def train(self, dictionary):
         raise NotImplemented
 
-    def write_test_pred(self, loader, accuracy):
+    def write_test_pred(self, accuracy):
         raise NotImplemented
 
 
@@ -149,7 +145,7 @@ class TrainerModels(object):
         super(TrainerModels, self).__init__()
         self.model = model
         self.num_epocs = num_epocs
-        self.train_loader, self.valid_loader, self.test_loader = loaders
+        self.train_loader,  self.test_loader = loaders
         self.criterion = crit
         self.optimizer = optimizer
         self.model_no = model_no
@@ -189,15 +185,18 @@ class TrainerModels(object):
         return test_loss, float(100.0 * correct) / len_data
 
     def train(self, dictionary):
+        test_loss, test_acc = 0.0, 0.0
         for x in range(1, self.num_epocs + 1):
             print("Epoc # {}".format(x))
+            if x == 15:
+                print("Changing to Adam")
+                self.optimizer = Adam(self.model.parameters(), lr=0.001)
             self.train_one_epoc()
-            #train_loss, train_acc = self.test((self.train_loader, 'train'))
-            vld_loss, vld_acc = self.test((self.valid_loader, 'Valid'))
-            print("Valid loss: {} \t Valid accuracy: {}%".format(vld_loss, vld_acc))
-            #test_loss, test_acc = self.test((self.test_loader, 'Test'))
-            for key, value in zip(dictionary.keys(), [self.model_no, x, vld_acc, vld_loss]):
+            test_loss, test_acc = self.test((self.test_loader, 'Test'))
+            print("Valid loss: {} \t Valid accuracy: {}%".format(test_loss, test_acc))
+            for key, value in zip(dictionary.keys(), [self.model_no, x, test_loss, test_acc]):
                 dictionary[key].append(value)
+        self.write_test_pred(test_acc)
 
     def write_test_pred(self, accuracy):
         self.model.eval()
@@ -219,7 +218,7 @@ class ResnetTransferTrainer(Trainer):
         super(ResnetTransferTrainer, self).__init__()
         self.batch_size = batch_size
         loaders, self.model = tavi_resnet(batch_size)
-        self.train_loader, self.valid_loader, self.test_loader = loaders
+        self.train_loader, self.test_loader = loaders
         self.criterion = critetion
         if optimizer is 'SGD':
             self.optimizer = SGD(params=self.model.fc.parameters(), lr=0.002, momentum=0.9)
@@ -260,17 +259,15 @@ class ResnetTransferTrainer(Trainer):
         return test_loss, float(100.0 * correct) / len_data
 
     def train(self, dictionary=None):
+        test_loss, test_acc = 0.0, 0.0
         for x in range(1, self.epoc_num + 1):
             print("Epoc # {}".format(x))
             self.train_one_epoc()
-            #train_loss, train_acc = self.test((self.train_loader, 'train'))
-            vld_loss, vld_acc = self.test((self.valid_loader, 'Valid'))
-            print("Valid loss: {} \t Valid accuracy: {}%".format(vld_loss, vld_acc))
-            if vld_acc > 85.0:
-                self.write_test_pred(vld_acc)
-            #test_loss, test_acc = self.test((self.test_loader, 'Test'))
+            test_loss, test_acc = self.test((self.test_loader, 'Test'))
+            print("Valid loss: {} \t Valid accuracy: {}%".format(test_loss, test_acc))
             #for key, value in zip(dictionary.keys(), [self.model_no, train_acc, train_loss, x, vld_acc, vld_loss, test_acc, test_loss]):
             #    dictionary[key].append(value)
+        self.write_test_pred(test_acc)
 
     def write_test_pred(self, accuracy):
         self.model.eval()
@@ -288,9 +285,11 @@ class ResnetTransferTrainer(Trainer):
 
 
 def single():
-    model = ConvulutionalNeuralNetwork(25, 50, 100, 50)
-    batch_size = 50
-    LR = 0.25
+    use_cuda = torch.cuda.is_available()
+    device = torch.device("cuda" if use_cuda else "cpu")
+    model = ConvulutionalNeuralNetwork(25, 50, 100, 50).to(device)
+    batch_size = 225
+    LR = 0.1
     num_epocs = 25
     res = {}
     trainer = TrainerModels(model, num_epocs, get_data_loaders_cifar10(batch_size), nn.CrossEntropyLoss(), SGD(params=model.parameters(), lr=LR), 0, batch_size)
@@ -314,6 +313,9 @@ def parse_table(df):
         hidden_size1 = int(row[5])
         hidden_size2 = int(row[6])
         model = ConvulutionalNeuralNetwork(channel_in1, channel_out1, hidden_size1, hidden_size2)
+        use_cuda = torch.cuda.is_available()
+        device = torch.device("cuda" if use_cuda else "cpu")
+        model = model().to(device)
         criterion = nn.CrossEntropyLoss()
         if row[7] in ["adam", "Adam", "ADAM"]:
             optimizer = Adam(model.parameters(), lr=LR)
