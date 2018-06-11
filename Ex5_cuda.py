@@ -256,15 +256,14 @@ class TrainerModels(object):
     def write_test_pred(self, accuracy):
         self.model.eval()
         predictions = []
-        test = pickle.load(open('test.pickle', 'rb'))
-        for data in test:
-            image = Variable(data).to(device)
+        for data, target in self.test_loader:
+            image, target = data.to(device), target.to(device)
             output = self.model(image)
             pred = output.data.max(1, keepdim=True)[1]  # get the index of the max log-probability
             predictions.append(str(pred.item()))
         ts = time.time()
         st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d_%H:%M:%S')
-        with open('E:\\DataScienceCourse\\test{}.txt'.format(accuracy), 'w') as f:
+        with open('test{}__{}.txt'.format(st, accuracy), 'w') as f:
             f.write('\n'.join(predictions))
 
 
@@ -333,22 +332,21 @@ class ResnetTransferTrainer(Trainer):
             test_acc_list.append(test_acc)
             test_loss_list.append(test_loss)
         confusion_matrix_creator(self.model, self.test_loader)
+        self.write_test_pred(test_acc_list[-1])
         print("Train_acc = {}\nTrain_loss = {}\nTest_acc = {}\nTest_loss = {}".format(train_acc_list, train_loss_list,
                                                                                       test_acc_list, test_loss_list))
 
     def write_test_pred(self, accuracy):
         self.model.eval()
         predictions = []
-        test = pickle.load(open('test.pickle', 'rb'))
-        for data in test:
-            image = Variable(data)
-            image = image.to(device)
+        for data, target in self.test_loader:
+            image, target = data.to(device), target.to(device)
             output = self.model(image)
             pred = output.data.max(1, keepdim=True)[1]  # get the index of the max log-probability
             predictions.append(str(pred.item()))
         ts = time.time()
         st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d_%H:%M:%S')
-        with open('test__{}____{}__.pred'.format(st, accuracy), 'w') as f:
+        with open('test{}__{}.txt'.format(st, accuracy), 'w') as f:
             f.write('\n'.join(predictions))
 
 
@@ -364,7 +362,7 @@ def single():
 
 
 def resenet():
-    trainer = ResnetTransferTrainer(batch_size=64, num_epocs=5, critetion=nn.CrossEntropyLoss(), optimizer='SGD')
+    trainer = ResnetTransferTrainer(batch_size=50, num_epocs=1, critetion=nn.CrossEntropyLoss(), optimizer='SGD')
     trainer.train()
 
 
