@@ -4,17 +4,19 @@
 1)Conv layer -> 3 channels to 50 with kernel size of 5<br/>
 2)BatchNorm2d<br/>
 3)Activation function (Relu)<br/>
-4)Conv layer -> 50 channels to 150 with kernel size of 5<br/>
-5)BatchNorm2d<br/>
-6)Activation function (Relu)<br/>
-7)Linear<br/>
-8)BatchNorm1d<br/>
-9)Activation(Relu)<br/>
-10)Dropout p = 0.5<br/>
-11)Linear<br/>
-12)BatchNorm1d<br/>
-13)Activation(Relu)<br/>
-14)Dropout p = 0.25<br/>
-15)Linear<br/>
-16)LogSoftmax<br/>
+4)Max Pooling -> Stride  = 2
+5)Conv layer -> 50 channels to 150 with kernel size of 5<br/>
+6)BatchNorm2d<br/>
+7)Activation function (Relu)<br/>
+8)Max Pooling -> Stride  = 2
+9)Linear<br/>
+10)BatchNorm1d<br/>
+11)Activation(Relu)<br/>
+12)Dropout p = 0.5<br/>
+13)Linear<br/>
+14)BatchNorm1d<br/>
+15)Activation(Relu)<br/>
+16)Dropout p = 0.25<br/>
+17)Linear<br/>
+18)LogSoftmax<br/>
 
