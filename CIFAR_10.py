@@ -162,7 +162,7 @@ class ConvulutionalNeuralNetwork(nn.Module):
         return self.softmax(out)
 
 
-def tavi_resnet(batch_size):
+def get_resnet(batch_size):
     model_conv = resnet18(pretrained=True)
     for param in model_conv.parameters():
         param.requires_grad = False
@@ -271,7 +271,7 @@ class ResnetTransferTrainer(Trainer):
     def __init__(self, batch_size, num_epocs, critetion, optimizer):
         super(ResnetTransferTrainer, self).__init__()
         self.batch_size = batch_size
-        loaders, self.model = tavi_resnet(batch_size)
+        loaders, self.model = get_resnet(batch_size)
         self.model = self.model.to(device)
         self.train_loader, self.test_loader = loaders
         self.criterion = critetion
