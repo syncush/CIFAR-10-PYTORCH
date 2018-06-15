@@ -398,4 +398,12 @@ def multi():
     df2.to_csv(path_or_buf="./results.csv")
 
 
-resenet()
+if __name__ == '__main__':	
+    if len(sys.argv) < 1 + 1:	
+        single()	
+    if sys.argv[1] in ["resnet", "Resnet"]:	
+        resenet()	
+    elif sys.argv[1] in ["single", "Single"]:	
+        single()	
+    else:	
+        multi()
